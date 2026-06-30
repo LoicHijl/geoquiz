@@ -41,7 +41,7 @@ new_gdf = pd.concat([no_merge, merged], ignore_index=True)
 # but they are part of one of the provinces already (ex 수원시)
 # We must filter these out manually
 print("Merging other, smaller cities...")
-other_cities = [[0,4], [4,6], [8,10], 
+other_cities = [[0,4], [4,7], [8,10], 
                 [14,16], [16,19], [27,30], 
                 [62,66], [74,76], [90,92], 
                 [127,129], [158,163]]
