@@ -1,4 +1,6 @@
 import geopandas as gpd
+import matplotlib.pyplot as plt
+import random # TODO: implement random selection modes
 
 # Read the dataset
 gdf = gpd.read_file("processed_korea.geojson")
@@ -38,3 +40,62 @@ mode = input("\nSelect mode: ").strip()
 # Currently only mode 1 exists: TODO: implement other modes and remove this
 print("Note: currently only mode 1 is implemented, defaulting to 1")
 mode = "1"
+
+# Set font for Windows
+plt.rcParams['font.family'] = 'Malgun Gothic'
+plt.rcParams['axes.unicode_minus'] = False  # Fixes negative signs breaking on plots
+
+# Initialize the plot
+plt.ion()
+fig, ax = plt.subplots(figsize=(9, 9))
+
+# Gamemode 1: Type names of regions and the region will be highlighted
+if mode == "1":
+    # Setup pre-game variables
+    guessed_indices = set()
+    quiz_gdf["status"] = 0 # Color for the guessed municipalities will be different based on this
+    total_municipalities = len(quiz_gdf) # Total number of municipalities to guess
+    game_active = True # Used for review after stopping the game
+
+    # Start our loop until we manually stop or find all municipalities
+    while (game_active and (len(guessed_indices) < total_municipalities)):
+        ax.clear()
+        
+        # Render map using custom values mapping to colors
+        quiz_gdf.plot(column='status', ax=ax, cmap='Set3', edgecolor='darkgray', vmin=0, vmax=2)
+        # Add text names dynamically to guessed municipalities
+        for idx, row in quiz_gdf.iterrows():
+            if row['name'] in guessed_indices:
+                ax.text(row['centroid_x'], row['centroid_y'], row['name'], 
+                        fontsize=8, ha='center', va='center', weight='bold',
+                        bbox=dict(boxstyle="round,pad=0.2", fc="white", ec="none", alpha=0.7))
+        
+        ax.set_title(f"Guessed: {len(guessed_indices)} / {total_municipalities}\nType 'stop' or '그만' to finish and review.")
+
+        plt.draw()
+        plt.pause(0.1)
+        
+        # Get the user guess
+        guess = input("\nEnter a county name: ").strip().lower()
+
+        # If the user wants to stop, continue to review
+        if guess == "stop" or guess == "그만":
+            game_active = False
+            break
+
+        # Check if there are any matches (i.e. user is correct)
+        match = quiz_gdf[quiz_gdf['name'] == guess]
+        if not match.empty:
+            match_indices = match.index.tolist()
+
+            # If we found a new one, add it to our set
+            if not set(match_indices).issubset(guessed_indices):
+                print(f"Correct! Found {guess}")
+                guessed_indices.update(match_indices)
+                quiz_gdf.loc[match_indices, 'status'] = 1
+            else:
+                print("You already found that one!")
+        # Else, it is wrong
+        else:
+            print("Not found, try again.")
+   
