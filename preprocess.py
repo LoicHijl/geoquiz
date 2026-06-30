@@ -20,7 +20,8 @@ kostat["region"] = kostat["code"].str[:2].map(level_1_map)
 # We want to remove 구, and instead use cities only, so we merge the big cities
 # In order to merge, we first make a selection of these cities, and assign them to the nearest province
 print("Merging metropolitan cities...")
-merging = ["서울", "부산", "대구", "인천", "광주", "대전", "울산", "세종"]
+merging =        ["서울", "부산", "대구", "인천", "광주", "대전", "울산", "세종"]
+merged_regions = ["전남", "경북", "충남", "경남", "경기", "충복", "경남", "경기"]
 merged_regions = ["경기", "경남", "경북", "경기", "전남", "충남", "경남", "충복"]
 
 # We then make two selections of the array, one with the to-be-merged cities, and one without
