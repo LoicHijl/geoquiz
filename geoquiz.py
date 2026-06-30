@@ -65,8 +65,10 @@ if mode == "1":
         quiz_gdf.plot(column='status', ax=ax, cmap='Set3', edgecolor='darkgray', vmin=0, vmax=2)
         # Add text names dynamically to guessed municipalities
         for idx, row in quiz_gdf.iterrows():
-            if row['name'] in guessed_indices:
-                ax.text(row['centroid_x'], row['centroid_y'], row['name'], 
+            if idx in guessed_indices:
+                # Extract centroid coordinates on the fly from the geometry column
+                centroid = row['geometry'].centroid
+                ax.text(centroid.x, centroid.y, row['name'], 
                         fontsize=8, ha='center', va='center', weight='bold',
                         bbox=dict(boxstyle="round,pad=0.2", fc="white", ec="none", alpha=0.7))
         
@@ -98,4 +100,41 @@ if mode == "1":
         # Else, it is wrong
         else:
             print("Not found, try again.")
+
+    # --- STOP / END REVIEW PHASE ---
+    print("\n--- Review Phase ---")
+    print("Revealing missed territories in red... Type 'exit' or '종료' in the terminal to close.")
+
+    # Identify what was left over and mark state to '2' (triggers color change)
+    quiz_gdf.loc[~quiz_gdf.index.isin(guessed_indices), 'status'] = 2
+
+    # Final render for review
+    ax.clear()
+    quiz_gdf.plot(column='status', ax=ax, cmap='bwr', edgecolor='dimgray', vmin=0, vmax=2)
+
+    # Label EVERYTHING now, using color distinctions for readability
+    for idx, row in quiz_gdf.iterrows():
+        is_guessed = idx in guessed_indices
+        
+        text_color = "darkblue" if is_guessed else "darkred"
+        bg_color = "white" if is_guessed else "mistyrose"
+        
+        # Extract centroid coordinates on the fly from the geometry column
+        centroid = row['geometry'].centroid
+        ax.text(centroid.x, centroid.y, row['name'], 
+                fontsize=8, ha='center', va='center', weight='bold', color=text_color,
+                bbox=dict(boxstyle="round,pad=0.2", fc=bg_color, ec=text_color, alpha=0.8, lw=0.5))
+
+    ax.set_title(f"Final Score: {len(guessed_indices)} / {total_municipalities}\nReviewing missed regions. Type 'exit' to quit.")
+    plt.draw()
+
+    while True:
+        leave = input("\nType 'exit' or '종료' to quit the application: ").strip().lower()
+        if leave == "exit" or leave == "종료":
+            break
+
+    plt.ioff()
+    plt.close()
+    print("Session closed.")
+
    
