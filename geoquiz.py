@@ -11,6 +11,11 @@ class Geoquiz:
         self.gdf = self.read_gpd(gpd_loc)
         self.prov_choice = -1
         self.mode = 1
+
+        # Select province
+        self.province_selector()
+        self.load_province(self.gdf)
+        self.game_mode_selector()
         
     def read_gpd(self, file_name = "processed_korea.geojson"):
         # Read the dataset
@@ -50,17 +55,46 @@ class Geoquiz:
             quiz_gdf = gdf.copy()
             print(f"Successfully loaded full South Korean data")
 
-        return quiz_gdf
+        self.quiz_gdf = quiz_gdf
     
+    def review(self, ax, total_municipalities, guessed_indices, score = None):
+        # --- STOP / END REVIEW PHASE ---
+        print("\n--- Review Phase ---")
+        print("Revealing missed territories in red... Type 'exit' or '종료' in the terminal to close.")
+        if not score:
+            score = len(guessed_indices)
+        # Identify what was left over and mark state to '2' (triggers color change)
+        # self.quiz_gdf.loc[~self.quiz_gdf.index.isin(guessed_indices), 'status'] = 4
+
+        # Final render for review
+        ax.clear()
+
+        self.quiz_gdf.plot(column='status', ax=ax, cmap='bwr', edgecolor='dimgray', vmin=0, vmax=2)
+
+
+        # Label EVERYTHING now, using color distinctions for readability
+        for idx, row in self.quiz_gdf.iterrows():
+            is_guessed = idx in guessed_indices
+            
+            text_color = "darkblue" if is_guessed else "darkred"
+            bg_color = "white" if is_guessed else "mistyrose"
+            
+            # Extract centroid coordinates on the fly from the geometry column
+            centroid = row['geometry'].centroid
+            ax.text(centroid.x, centroid.y, row['name'], 
+                    fontsize=8, ha='center', va='center', weight='bold', color=text_color,
+                    bbox=dict(boxstyle="round,pad=0.2", fc=bg_color, ec=text_color, alpha=0.8, lw=0.5))
+
+        ax.set_title(f"Final Score: {score} / {total_municipalities}\nReviewing missed regions. Type 'exit' or '종료' to quit.")
+        plt.draw()
+
+    def save(self):
+        save = input("Do you wish to save your results? [y/n]")
+        if save.lower() == "Y":
+            self.quiz_gdf.to_file(f"dresults-{str(datetime.date.today())}-mode{self.mode}({self.prov_choice}).geojson")
+            print("Saving results....")
+
     def run(self):
-        # Read gpd
-        gdf = self.read_gpd()
-
-        # Select province
-        self.province_selector()
-        quiz_gdf = self.load_province(gdf)
-        self.game_mode_selector()
-
         # Set font for Windows
         plt.rcParams['font.family'] = 'Malgun Gothic'
         plt.rcParams['axes.unicode_minus'] = False  # Fixes negative signs breaking on plots
@@ -73,8 +107,8 @@ class Geoquiz:
         if self.mode == "1":
             # Setup pre-game variables
             guessed_indices = set()
-            quiz_gdf["status"] = 0 # Color for the guessed municipalities will be different based on this
-            total_municipalities = len(quiz_gdf) # Total number of municipalities to guess
+            self.quiz_gdf["status"] = 0 # Color for the guessed municipalities will be different based on this
+            total_municipalities = len(self.quiz_gdf) # Total number of municipalities to guess
             game_active = True # Used for review after stopping the game
 
             # Start our loop until we manually stop or find all municipalities
@@ -82,9 +116,9 @@ class Geoquiz:
                 ax.clear()
                 
                 # Render map using custom values mapping to colors
-                quiz_gdf.plot(column='status', ax=ax, cmap='Set3', edgecolor='darkgray', vmin=0, vmax=2)
+                self.quiz_gdf.plot(column='status', ax=ax, cmap='Set3', edgecolor='darkgray', vmin=0, vmax=2)
                 # Add text names dynamically to guessed municipalities
-                for idx, row in quiz_gdf.iterrows():
+                for idx, row in self.quiz_gdf.iterrows():
                     if idx in guessed_indices:
                         # Extract centroid coordinates on the fly from the geometry column
                         centroid = row['geometry'].centroid
@@ -106,7 +140,7 @@ class Geoquiz:
                     break
 
                 # Check if there are any matches (i.e. user is correct)
-                match = quiz_gdf[quiz_gdf['name'] == guess]
+                match = self.quiz_gdf[self.quiz_gdf['name'] == guess]
                 if not match.empty:
                     match_indices = match.index.tolist()
 
@@ -114,40 +148,19 @@ class Geoquiz:
                     if not set(match_indices).issubset(guessed_indices):
                         print(f"Correct! Found {guess}")
                         guessed_indices.update(match_indices)
-                        quiz_gdf.loc[match_indices, 'status'] = 1
+                        self.quiz_gdf.loc[match_indices, 'status'] = 1
                     else:
                         print("You already found that one!")
                 # Else, it is wrong
                 else:
                     print("Not found, try again.")
 
-            # --- STOP / END REVIEW PHASE ---
-            print("\n--- Review Phase ---")
-            print("Revealing missed territories in red... Type 'exit' or '종료' in the terminal to close.")
-
             # Identify what was left over and mark state to '2' (triggers color change)
-            quiz_gdf.loc[~quiz_gdf.index.isin(guessed_indices), 'status'] = 2
+            self.quiz_gdf.loc[~self.quiz_gdf.index.isin(guessed_indices), 'status'] = 2
 
-            # Final render for review
-            ax.clear()
-            quiz_gdf.plot(column='status', ax=ax, cmap='bwr', edgecolor='dimgray', vmin=0, vmax=2)
+            self.review(ax, total_municipalities, guessed_indices)
 
-            # Label EVERYTHING now, using color distinctions for readability
-            for idx, row in quiz_gdf.iterrows():
-                is_guessed = idx in guessed_indices
-                
-                text_color = "darkblue" if is_guessed else "darkred"
-                bg_color = "white" if is_guessed else "mistyrose"
-                
-                # Extract centroid coordinates on the fly from the geometry column
-                centroid = row['geometry'].centroid
-                ax.text(centroid.x, centroid.y, row['name'], 
-                        fontsize=8, ha='center', va='center', weight='bold', color=text_color,
-                        bbox=dict(boxstyle="round,pad=0.2", fc=bg_color, ec=text_color, alpha=0.8, lw=0.5))
-
-            ax.set_title(f"Final Score: {len(guessed_indices)} / {total_municipalities}\nReviewing missed regions. Type 'exit' or '종료' to quit.")
-            plt.draw()
-
+            self.save()
             while True:
                 leave = input("\nType 'exit' or '종료' to quit the application: ").strip().lower()
                 if leave == "exit" or leave == "종료":
@@ -161,9 +174,9 @@ class Geoquiz:
         if self.mode == "2":
             # Setup pre-game variables
             guessed_indices = set()
-            all_municipality_names = quiz_gdf["name"].to_list()
-            quiz_gdf["status"] = 0 # Color for the guessed municipalities will be different based on this
-            total_municipalities = len(quiz_gdf) # Total number of municipalities to guess
+            all_municipality_names = self.quiz_gdf["name"].to_list()
+            self.quiz_gdf["status"] = 0 # Color for the guessed municipalities will be different based on this
+            total_municipalities = len(self.quiz_gdf) # Total number of municipalities to guess
             game_active = True # Used for review after stopping the game
             score = 0
 
@@ -175,14 +188,14 @@ class Geoquiz:
                 target = random.choice(all_municipality_names)
                 all_municipality_names.remove(target)
                 
-                quiz_gdf.loc[quiz_gdf['name'] == target, "status"] = 3
+                self.quiz_gdf.loc[self.quiz_gdf['name'] == target, "status"] = 3
                 
                 answer_guessed = False
                 while not answer_guessed:
                     # Render map using custom values mapping to colors
-                    quiz_gdf.plot(column='status', ax=ax, cmap='Set3', edgecolor='darkgray', vmin=0, vmax=4)
+                    self.quiz_gdf.plot(column='status', ax=ax, cmap='Set3', edgecolor='darkgray', vmin=0, vmax=4)
                     # Add text names dynamically to guessed municipalities
-                    for idx, row in quiz_gdf.iterrows():
+                    for idx, row in self.quiz_gdf.iterrows():
                         if idx in guessed_indices:
                             # Extract centroid coordinates on the fly from the geometry column
                             centroid = row['geometry'].centroid
@@ -203,72 +216,44 @@ class Geoquiz:
                         game_active = False
                         break
                     if guess == "next" or guess == "다음":
-                        match = quiz_gdf[quiz_gdf['name'] == target]
+                        match = self.quiz_gdf[self.quiz_gdf['name'] == target]
                         match_indices = match.index.tolist()
 
                         # If we found a new one, add it to our set
                         print(f"Skipped {target}")
                         guessed_indices.update(match_indices)
-                        quiz_gdf.loc[match_indices, 'status'] = 1
+                        self.quiz_gdf.loc[match_indices, 'status'] = 1
                         answer_guessed = True
                     # Check if there are any matches (i.e. user is correct)
                     elif guess == target:
-                        match = quiz_gdf[quiz_gdf['name'] == guess]
+                        match = self.quiz_gdf[self.quiz_gdf['name'] == guess]
                         match_indices = match.index.tolist()
                         score = score + len(match_indices)
 
                         # If we found a new one, add it to our set
                         print(f"Correct! Found {guess}")
                         guessed_indices.update(match_indices)
-                        quiz_gdf.loc[match_indices, 'status'] = 2
+                        self.quiz_gdf.loc[match_indices, 'status'] = 2
                         answer_guessed = True
                         break
                     # Else, it is wrong
                     else:
                         print("Sorry, this is the wrong area!")
 
-            print("Saving results....")
-            quiz_gdf.to_file(f"dresults-{str(datetime.date.today())}-mode{self.mode}({self.prov_choice}).geojson")
-
-            # --- STOP / END REVIEW PHASE ---
-            print("\n--- Review Phase ---")
-            print("Revealing missed territories in red... Type 'exit' or '종료' in the terminal to close.")
-
-            # Identify what was left over and mark state to '2' (triggers color change)
-            # quiz_gdf.loc[~quiz_gdf.index.isin(guessed_indices), 'status'] = 4
-
-            # Final render for review
-            ax.clear()
             # Swap around the color pallete so that red = wrong, white = skipped and blue = correct
-            quiz_gdf.loc[quiz_gdf["status"] == 3, 'status'] = 1
-            quiz_gdf.loc[quiz_gdf["status"] == 0, 'status'] = 3
-            quiz_gdf.loc[quiz_gdf["status"] == 2, 'status'] = 0
-            quiz_gdf.loc[quiz_gdf["status"] == 3, 'status'] = 2
+            self.quiz_gdf.loc[self.quiz_gdf["status"] == 3, 'status'] = 1
+            self.quiz_gdf.loc[self.quiz_gdf["status"] == 0, 'status'] = 3
+            self.quiz_gdf.loc[self.quiz_gdf["status"] == 2, 'status'] = 0
+            self.quiz_gdf.loc[self.quiz_gdf["status"] == 3, 'status'] = 2
+            self.review(ax, total_municipalities, guessed_indices, score)
 
-            quiz_gdf.plot(column='status', ax=ax, cmap='bwr', edgecolor='dimgray', vmin=0, vmax=2)
 
-
-            # Label EVERYTHING now, using color distinctions for readability
-            for idx, row in quiz_gdf.iterrows():
-                is_guessed = idx in guessed_indices
-                
-                text_color = "darkblue" if is_guessed else "darkred"
-                bg_color = "white" if is_guessed else "mistyrose"
-                
-                # Extract centroid coordinates on the fly from the geometry column
-                centroid = row['geometry'].centroid
-                ax.text(centroid.x, centroid.y, row['name'], 
-                        fontsize=8, ha='center', va='center', weight='bold', color=text_color,
-                        bbox=dict(boxstyle="round,pad=0.2", fc=bg_color, ec=text_color, alpha=0.8, lw=0.5))
-
-            ax.set_title(f"Final Score: {score} / {total_municipalities}\nReviewing missed regions. Type 'exit' or '종료' to quit.")
-            plt.draw()
+            self.save()
 
             while True:
                 leave = input("\nType 'exit' or '종료' to quit the application: ").strip().lower()
                 if leave == "exit" or leave == "종료":
                     break
-
             plt.ioff()
             plt.close()
             print("Session closed.")
