@@ -90,7 +90,7 @@ class Geoquiz:
 
     def save(self):
         save = input("Do you wish to save your results? [y/n]")
-        if save.lower() == "Y":
+        if save.lower() == "y":
             self.quiz_gdf.to_file(f"dresults-{str(datetime.date.today())}-mode{self.mode}({self.prov_choice}).geojson")
             print("Saving results....")
 
